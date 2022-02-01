@@ -1,0 +1,238 @@
+name: Nightly Publish
+
+on:
+  schedule:
+    # * is a special character in YAML so you have to quote this string
+    - cron:  '0 0 * * *'
+  workflow_dispatch:
+
+jobs:
+  create-draft-release:
+    name: Create Draft Release
+    runs-on: ubuntu-latest
+    outputs:
+      tag_name: v${{ steps.date.outputs.date }}
+      release_name: v${{ steps.date.outputs.date }}
+      version: ${{ steps.date.outputs.date }}
+      id: ${{ steps.create-release.outputs.id }}
+      html_url: ${{ steps.create-release.outputs.html_url }}
+      upload_url: ${{ steps.create-release.outputs.upload_url }}
+    steps:
+      - name: Get current date
+        id: date
+        run: |
+          eval "$(date +'today=%F now=%s')"
+          midnight=$(date -d "$today 0" +%s)
+          echo "::set-output name=date::$(date +'%Y%m%d').$((now - midnight)).0"
+
+      - name: Get latest release
+        id: latest-release
+        uses: actions/github-script@v5
+        with:
+          script: |
+            try {
+              const latestRelease = await github.rest.repos.getLatestRelease({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+              });
+
+              console.log(latestRelease);
+
+              if (latestRelease.data && latestRelease.data.body) {
+                const re = /Latest commit hash: \"(.*)\"/i;
+                const found = latestRelease.data.body.match(re);
+
+                console.log(found);
+
+                if (found.length > 0) {
+                  const releaseHash = found[1];
+                  return releaseHash;
+                }
+              }
+            } catch (err) {
+            }
+
+            return '';
+
+      - name: Get latest commit
+        id: latest-commit
+        uses: actions/github-script@v5
+        with:
+          script: |
+            const branch = await github.rest.repos.getBranch({
+              owner: 'ExpressLRS',
+              repo: 'ExpressLRS-Configurator',
+              branch: 'master',
+            });
+
+            console.log(branch);
+
+            return branch.data.commit.sha;
+
+      - name: Compare latest release to current commit
+        uses: actions/github-script@v5
+        with:
+          script: |
+            const latestCommitHash = ${{ steps.latest-commit.outputs.result }}
+            const latestReleaseHash = ${{ steps.latest-release.outputs.result }}
+
+            if (latestCommitHash === latestReleaseHash) {
+              console.log('No changes since last release, cancelling workflow run');
+
+              await github.rest.actions.cancelWorkflowRun({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                run_id: ${{ github.run_id }},
+              });
+
+              const ms = 60*1000;
+              await new Promise(resolve => setTimeout(resolve, ms));
+            }
+
+      - name: Get changes between commits
+        id: latest-change-messages
+        uses: actions/github-script@v5
+        with:
+          script: |
+            const latestCommitHash = ${{ steps.latest-commit.outputs.result }}
+            const latestReleaseHash = ${{ steps.latest-release.outputs.result }}
+
+            let messages = [];
+
+            if (latestReleaseHash !== '') {
+              const commits = await github.rest.repos.listCommits({
+                owner: 'ExpressLRS',
+                repo: 'ExpressLRS-Configurator',
+                sha: latestCommitHash,
+              });
+
+              for (let i = 0; i < commits.data.length; i++) {
+                const commit = commits.data[i];
+                if (commit.sha === latestReleaseHash) {
+                  break;
+                }
+                console.log(commit);
+                const message = commit.commit.message;
+                if (message.toLowerCase().startsWith('merge pull request')) {
+                  messages.push(message.replace(/\n/g, ' '));
+                  console.log(commit.commit.message);
+                }
+              }
+            }
+
+            const releaseMessage =
+              `This is a nightly build from the master branch, it may be unstable and should only be used for testing purposes.<br/><br/>${messages.join('<br/>')}<br/><br/>Latest commit hash: "${latestCommitHash}"`;
+
+            /* write the release message to a file */
+            require('fs').writeFileSync('releaseMessage.md', releaseMessage);
+            return releaseMessage;
+
+      - name: Create Release
+        id: create-release
+        uses: actions/create-release@latest
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: v${{ steps.date.outputs.date }}
+          release_name: v${{ steps.date.outputs.date }}
+          draft: true
+          prerelease: false
+          body_path: './releaseMessage.md'
+
+  publish-files:
+    runs-on: ${{ matrix.os }}
+    needs: create-draft-release
+    strategy:
+      matrix:
+        os: [ 'ubuntu-18.04', 'windows-latest', 'macos-latest' ]
+    steps:
+      - name: Setup apt dependencies
+        if: matrix.os == 'ubuntu-18.04'
+        run: |
+          sudo apt update
+          sudo apt-get install --no-install-recommends -y libarchive-tools rpm
+
+      - name: Checkout git repo
+        uses: actions/checkout@v2
+        with:
+          repository: 'ExpressLRS/ExpressLRS-Configurator'
+          ref: 'master'
+
+      - name: Install Node, NPM and Yarn
+        uses: actions/setup-node@v1
+        with:
+          node-version: 14.17.6
+
+      - name: Change version in src/package.json
+        uses: actions/github-script@v5
+        with:
+          script: |
+            let pkg = require('./src/package.json');
+            pkg.version = '${{needs.create-draft-release.outputs.version}}';
+            require('fs').writeFileSync('src/package.json', JSON.stringify(pkg, null, 2));
+
+      - name: Change owner and repo in package.json
+        uses: actions/github-script@v5
+        with:
+          script: |
+            let pkg = require('./package.json');
+            pkg.build.publish.owner = context.repo.owner;
+            pkg.build.publish.repo = context.repo.repo;
+            require('fs').writeFileSync('package.json', JSON.stringify(pkg, null, 2));
+
+      - name: Get yarn cache directory path
+        id: yarn-cache-dir-path
+        run: echo "::set-output name=dir::$(yarn cache dir)"
+
+      - uses: actions/cache@v1
+        id: yarn-cache
+        with:
+          path: ${{ steps.yarn-cache-dir-path.outputs.dir }}
+          key: ${{ runner.os }}-yarn-${{ hashFiles('**/yarn.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-yarn-
+
+      - name: Install dependencies
+        run: |
+          yarn install --prefer-offline --network-timeout 180000
+
+      - name: Publish Windows releases
+        if: matrix.os == 'windows-latest'
+        shell: powershell
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          yarn build
+          yarn electron-builder --publish always --x64 --win
+
+      - name: Publish macOS releases
+        if: matrix.os == 'macos-latest'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          yarn build
+          yarn electron-builder --publish always --x64 --mac
+
+      - name: Publish Linux releases
+        if: matrix.os == 'ubuntu-18.04'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          yarn build
+          yarn electron-builder --publish always --x64 --linux
+
+  publish-release:
+    name: Publish Release
+    runs-on: ubuntu-latest
+    needs: [create-draft-release, publish-files]
+    steps:
+      - name: Update draft to release
+        uses: actions/github-script@v5
+        with:
+          script: |
+            await github.rest.repos.updateRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              release_id: ${{needs.create-draft-release.outputs.id}},
+              draft: false
+            });
