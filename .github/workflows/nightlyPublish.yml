@@ -183,6 +183,7 @@ jobs:
             let pkg = require('./src/package.json');
             pkg.version = '${{needs.create-draft-release.outputs.version}}';
             pkg.productName = '${{env.PRODUCT_NAME}}';
+            pkg.name = '${{env.PACKAGE_NAME}}';
             require('fs').writeFileSync('src/package.json', JSON.stringify(pkg, null, 2));
 
       - name: Change owner and repo in package.json
@@ -195,7 +196,6 @@ jobs:
             pkg.productName = '${{env.PRODUCT_NAME}}';
             pkg.build.productName = '${{env.PRODUCT_NAME}}';
             pkg.build.appId = '${{env.APP_ID}}';
-            pkg.build.linux.packageName = '${{env.PACKAGE_NAME}}';
             require('fs').writeFileSync('package.json', JSON.stringify(pkg, null, 2));
 
       - name: Get yarn cache directory path
