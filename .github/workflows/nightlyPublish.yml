@@ -254,3 +254,19 @@ jobs:
               release_id: ${{needs.create-draft-release.outputs.id}},
               draft: false
             });
+
+  delete-release-on-failure:
+    name: Delete Release On Failure
+    runs-on: ubuntu-latest
+    if: ${{ always() && needs.create-draft-release.result == 'success' && (needs.publish-files.result == 'failure' || needs.publish-files.result == 'cancelled') }}
+    needs: [create-draft-release, publish-files]
+    steps:
+      - name: Delete Release
+        uses: actions/github-script@v5
+        with:
+          script: |
+            await github.rest.repos.deleteRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              release_id: ${{needs.create-draft-release.outputs.id}}
+            });
