@@ -6,6 +6,10 @@ on:
     - cron:  '0 0 * * *'
   workflow_dispatch:
 
+env:
+  PRODUCT_NAME: ExpressLRS Configurator Nightly
+  APP_ID: org.expresslrs.configurator.nightly
+
 jobs:
   create-draft-release:
     name: Create Draft Release
@@ -158,10 +162,18 @@ jobs:
           repository: 'ExpressLRS/ExpressLRS-Configurator'
           ref: 'master'
 
+      - name: Checkout git repo
+        uses: actions/checkout@v2
+        with:
+          path: 'nightlyRepo'
+
       - name: Install Node, NPM and Yarn
         uses: actions/setup-node@v1
         with:
           node-version: 14.17.6
+
+      - name: Copy assets files
+        run: npx cpr nightlyRepo/assets assets -o
 
       - name: Change version in src/package.json
         uses: actions/github-script@v5
@@ -169,6 +181,7 @@ jobs:
           script: |
             let pkg = require('./src/package.json');
             pkg.version = '${{needs.create-draft-release.outputs.version}}';
+            pkg.productName = '${{env.PRODUCT_NAME}}';
             require('fs').writeFileSync('src/package.json', JSON.stringify(pkg, null, 2));
 
       - name: Change owner and repo in package.json
@@ -178,6 +191,9 @@ jobs:
             let pkg = require('./package.json');
             pkg.build.publish.owner = context.repo.owner;
             pkg.build.publish.repo = context.repo.repo;
+            pkg.productName = '${{env.PRODUCT_NAME}}';
+            pkg.build.productName = '${{env.PRODUCT_NAME}}';
+            pkg.build.appId = '${{env.APP_ID}}';
             require('fs').writeFileSync('package.json', JSON.stringify(pkg, null, 2));
 
       - name: Get yarn cache directory path
