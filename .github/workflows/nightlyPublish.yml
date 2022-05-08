@@ -171,7 +171,7 @@ jobs:
       - name: Install Node, NPM and Yarn
         uses: actions/setup-node@v1
         with:
-          node-version: 14.17.6
+          node-version: 16.15.0
 
       - name: Copy assets files
         run: npx cpr nightlyRepo/assets assets -o
