@@ -19,20 +19,18 @@ jobs:
       tag_name: v${{ steps.date.outputs.date }}
       release_name: v${{ steps.date.outputs.date }}
       version: ${{ steps.date.outputs.date }}
-      id: ${{ steps.create-release.outputs.id }}
-      html_url: ${{ steps.create-release.outputs.html_url }}
-      upload_url: ${{ steps.create-release.outputs.upload_url }}
+      id: ${{ steps.create-release.outputs.result }}
     steps:
       - name: Get current date
         id: date
         run: |
           eval "$(date +'today=%F now=%s')"
           midnight=$(date -d "$today 0" +%s)
-          echo "::set-output name=date::$(date +'%Y%m%d').$((now - midnight)).0"
+          echo "date=$(date +'%Y%m%d').$((now - midnight)).0" >> $GITHUB_OUTPUT
 
       - name: Get latest release
         id: latest-release
-        uses: actions/github-script@v5
+        uses: actions/github-script@v6
         with:
           script: |
             try {
@@ -61,7 +59,7 @@ jobs:
 
       - name: Get latest commit
         id: latest-commit
-        uses: actions/github-script@v5
+        uses: actions/github-script@v6
         with:
           script: |
             const branch = await github.rest.repos.getBranch({
@@ -75,7 +73,7 @@ jobs:
             return branch.data.commit.sha;
 
       - name: Compare latest release to current commit
-        uses: actions/github-script@v5
+        uses: actions/github-script@v6
         with:
           script: |
             const latestCommitHash = ${{ steps.latest-commit.outputs.result }}
@@ -96,7 +94,7 @@ jobs:
 
       - name: Get changes between commits
         id: latest-change-messages
-        uses: actions/github-script@v5
+        uses: actions/github-script@v6
         with:
           script: |
             const latestCommitHash = ${{ steps.latest-commit.outputs.result }}
@@ -134,15 +132,26 @@ jobs:
 
       - name: Create Release
         id: create-release
-        uses: actions/create-release@latest
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: actions/github-script@v6
         with:
-          tag_name: v${{ steps.date.outputs.date }}
-          release_name: v${{ steps.date.outputs.date }}
-          draft: true
-          prerelease: false
-          body_path: './releaseMessage.md'
+          script: |
+            const bodyFileContent = require('fs').readFileSync('releaseMessage.md', { encoding: 'utf8' });
+
+            const createReleaseResponse = await github.rest.repos.createRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              draft: true,
+              prerelease: false,
+              tag_name: 'v${{ steps.date.outputs.date }}',
+              name: 'v${{ steps.date.outputs.date }}',
+              body: bodyFileContent
+            });
+
+            const {
+              data: { id: releaseId, html_url: htmlUrl, upload_url: uploadUrl }
+            } = createReleaseResponse;
+
+            return releaseId;
 
   publish-files:
     runs-on: ${{ matrix.os }}
@@ -158,26 +167,27 @@ jobs:
           sudo apt-get install --no-install-recommends -y libarchive-tools rpm
 
       - name: Checkout git repo
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           repository: 'ExpressLRS/ExpressLRS-Configurator'
           ref: 'master'
 
       - name: Checkout git repo
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           path: 'nightlyRepo'
 
       - name: Install Node, NPM and Yarn
-        uses: actions/setup-node@v1
+        uses: actions/setup-node@v3
         with:
           node-version: 16.15.0
+          cache: 'yarn'
 
       - name: Copy assets files
         run: npx cpr nightlyRepo/assets assets -o
 
       - name: Change version in src/package.json
-        uses: actions/github-script@v5
+        uses: actions/github-script@v6
         with:
           script: |
             let pkg = require('./src/package.json');
@@ -187,7 +197,7 @@ jobs:
             require('fs').writeFileSync('src/package.json', JSON.stringify(pkg, null, 2));
 
       - name: Change owner and repo in package.json
-        uses: actions/github-script@v5
+        uses: actions/github-script@v6
         with:
           script: |
             let pkg = require('./package.json');
@@ -198,18 +208,6 @@ jobs:
             pkg.build.productName = '${{env.PRODUCT_NAME}}';
             pkg.build.appId = '${{env.APP_ID}}';
             require('fs').writeFileSync('package.json', JSON.stringify(pkg, null, 2));
-
-      - name: Get yarn cache directory path
-        id: yarn-cache-dir-path
-        run: echo "::set-output name=dir::$(yarn cache dir)"
-
-      - uses: actions/cache@v1
-        id: yarn-cache
-        with:
-          path: ${{ steps.yarn-cache-dir-path.outputs.dir }}
-          key: ${{ runner.os }}-yarn-${{ hashFiles('**/yarn.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-yarn-
 
       - name: Install dependencies
         run: |
@@ -246,7 +244,7 @@ jobs:
     needs: [ create-draft-release, publish-files ]
     steps:
       - name: Update draft to release
-        uses: actions/github-script@v5
+        uses: actions/github-script@v6
         with:
           script: |
             await github.rest.repos.updateRelease({
@@ -263,7 +261,7 @@ jobs:
     needs: [ create-draft-release, publish-files ]
     steps:
       - name: Delete Release
-        uses: actions/github-script@v5
+        uses: actions/github-script@v6
         with:
           script: |
             await github.rest.repos.deleteRelease({
