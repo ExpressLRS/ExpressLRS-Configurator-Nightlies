@@ -67,7 +67,7 @@ jobs:
             const branch = await github.rest.repos.getBranch({
               owner: 'ExpressLRS',
               repo: 'ExpressLRS-Configurator',
-              branch: 'master',
+              branch: 'cloudbuilds',
             });
 
             console.log(branch);
@@ -126,7 +126,7 @@ jobs:
             }
 
             const releaseMessage =
-              `This is a nightly build from the master branch, it may be unstable and should only be used for testing purposes.<br/><br/>${messages.join('<br/>')}<br/><br/>Latest commit hash: "${latestCommitHash}"`;
+              `This is a nightly build from the cloudbuilds branch, it may be unstable and should only be used for testing purposes.<br/><br/>${messages.join('<br/>')}<br/><br/>Latest commit hash: "${latestCommitHash}"`;
 
             /* write the release message to a file */
             require('fs').writeFileSync('releaseMessage.md', releaseMessage);
@@ -161,7 +161,7 @@ jobs:
         uses: actions/checkout@v2
         with:
           repository: 'ExpressLRS/ExpressLRS-Configurator'
-          ref: 'master'
+          ref: 'cloudbuilds'
 
       - name: Checkout git repo
         uses: actions/checkout@v2
