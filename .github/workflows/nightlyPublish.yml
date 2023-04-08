@@ -28,7 +28,7 @@ jobs:
         run: |
           eval "$(date +'today=%F now=%s')"
           midnight=$(date -d "$today 0" +%s)
-          echo "::set-output name=date::$(date +'%Y%m%d').$((now - midnight)).0"
+          echo "date=$(date +'%Y%m%d').$((now - midnight)).0" >> $GITHUB_OUTPUT
 
       - name: Get latest release
         id: latest-release
@@ -169,9 +169,10 @@ jobs:
           path: 'nightlyRepo'
 
       - name: Install Node, NPM and Yarn
-        uses: actions/setup-node@v1
+        uses: actions/setup-node@v3
         with:
-          node-version: 16.15.0
+          node-version: 16.16.0
+          cache: 'yarn'
 
       - name: Copy assets files
         run: npx cpr nightlyRepo/assets assets -o
@@ -198,18 +199,6 @@ jobs:
             pkg.build.productName = '${{env.PRODUCT_NAME}}';
             pkg.build.appId = '${{env.APP_ID}}';
             require('fs').writeFileSync('package.json', JSON.stringify(pkg, null, 2));
-
-      - name: Get yarn cache directory path
-        id: yarn-cache-dir-path
-        run: echo "::set-output name=dir::$(yarn cache dir)"
-
-      - uses: actions/cache@v1
-        id: yarn-cache
-        with:
-          path: ${{ steps.yarn-cache-dir-path.outputs.dir }}
-          key: ${{ runner.os }}-yarn-${{ hashFiles('**/yarn.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-yarn-
 
       - name: Install dependencies
         run: |
