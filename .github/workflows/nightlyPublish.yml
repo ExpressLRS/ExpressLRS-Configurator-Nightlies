@@ -65,7 +65,7 @@ jobs:
             const branch = await github.rest.repos.getBranch({
               owner: 'ExpressLRS',
               repo: 'ExpressLRS-Configurator',
-              branch: 'master',
+              branch: 'cloudbuilds',
             });
 
             console.log(branch);
@@ -124,7 +124,7 @@ jobs:
             }
 
             const releaseMessage =
-              `This is a nightly build from the master branch, it may be unstable and should only be used for testing purposes.<br/><br/>${messages.join('<br/>')}<br/><br/>Latest commit hash: "${latestCommitHash}"`;
+              `This is a nightly build from the cloudbuilds branch, it may be unstable and should only be used for testing purposes.<br/><br/>${messages.join('<br/>')}<br/><br/>Latest commit hash: "${latestCommitHash}"`;
 
             /* write the release message to a file */
             require('fs').writeFileSync('releaseMessage.md', releaseMessage);
@@ -158,10 +158,10 @@ jobs:
     needs: create-draft-release
     strategy:
       matrix:
-        os: [ 'ubuntu-18.04', 'windows-2019', 'macos-latest' ]
+        os: [ 'ubuntu-20.04', 'windows-2019', 'macos-latest' ]
     steps:
       - name: Setup apt dependencies
-        if: matrix.os == 'ubuntu-18.04'
+        if: matrix.os == 'ubuntu-20.04'
         run: |
           sudo apt update
           sudo apt-get install --no-install-recommends -y libarchive-tools rpm
@@ -170,7 +170,7 @@ jobs:
         uses: actions/checkout@v3
         with:
           repository: 'ExpressLRS/ExpressLRS-Configurator'
-          ref: 'master'
+          ref: 'cloudbuilds'
 
       - name: Checkout git repo
         uses: actions/checkout@v3
@@ -180,7 +180,7 @@ jobs:
       - name: Install Node, NPM and Yarn
         uses: actions/setup-node@v3
         with:
-          node-version: 16.15.0
+          node-version: 16.16.0
           cache: 'yarn'
 
       - name: Copy assets files
@@ -231,7 +231,7 @@ jobs:
           yarn electron-builder --publish always --x64 --mac
 
       - name: Publish Linux releases
-        if: matrix.os == 'ubuntu-18.04'
+        if: matrix.os == 'ubuntu-20.04'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
