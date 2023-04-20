@@ -19,9 +19,7 @@ jobs:
       tag_name: v${{ steps.date.outputs.date }}
       release_name: v${{ steps.date.outputs.date }}
       version: ${{ steps.date.outputs.date }}
-      id: ${{ steps.create-release.outputs.id }}
-      html_url: ${{ steps.create-release.outputs.html_url }}
-      upload_url: ${{ steps.create-release.outputs.upload_url }}
+      id: ${{ steps.create-release.outputs.result }}
     steps:
       - name: Get current date
         id: date
@@ -32,7 +30,7 @@ jobs:
 
       - name: Get latest release
         id: latest-release
-        uses: actions/github-script@v5
+        uses: actions/github-script@v6
         with:
           script: |
             try {
@@ -61,7 +59,7 @@ jobs:
 
       - name: Get latest commit
         id: latest-commit
-        uses: actions/github-script@v5
+        uses: actions/github-script@v6
         with:
           script: |
             const branch = await github.rest.repos.getBranch({
@@ -75,7 +73,7 @@ jobs:
             return branch.data.commit.sha;
 
       - name: Compare latest release to current commit
-        uses: actions/github-script@v5
+        uses: actions/github-script@v6
         with:
           script: |
             const latestCommitHash = ${{ steps.latest-commit.outputs.result }}
@@ -96,7 +94,7 @@ jobs:
 
       - name: Get changes between commits
         id: latest-change-messages
-        uses: actions/github-script@v5
+        uses: actions/github-script@v6
         with:
           script: |
             const latestCommitHash = ${{ steps.latest-commit.outputs.result }}
@@ -134,15 +132,26 @@ jobs:
 
       - name: Create Release
         id: create-release
-        uses: actions/create-release@latest
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: actions/github-script@v6
         with:
-          tag_name: v${{ steps.date.outputs.date }}
-          release_name: v${{ steps.date.outputs.date }}
-          draft: true
-          prerelease: false
-          body_path: './releaseMessage.md'
+          script: |
+            const bodyFileContent = require('fs').readFileSync('releaseMessage.md', { encoding: 'utf8' });
+
+            const createReleaseResponse = await github.rest.repos.createRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              draft: true,
+              prerelease: false,
+              tag_name: 'v${{ steps.date.outputs.date }}',
+              name: 'v${{ steps.date.outputs.date }}',
+              body: bodyFileContent
+            });
+
+            const {
+              data: { id: releaseId, html_url: htmlUrl, upload_url: uploadUrl }
+            } = createReleaseResponse;
+
+            return releaseId;
 
   publish-files:
     runs-on: ${{ matrix.os }}
@@ -158,13 +167,13 @@ jobs:
           sudo apt-get install --no-install-recommends -y libarchive-tools rpm
 
       - name: Checkout git repo
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           repository: 'ExpressLRS/ExpressLRS-Configurator'
           ref: 'cloudbuilds'
 
       - name: Checkout git repo
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           path: 'nightlyRepo'
 
@@ -178,7 +187,7 @@ jobs:
         run: npx cpr nightlyRepo/assets assets -o
 
       - name: Change version in src/package.json
-        uses: actions/github-script@v5
+        uses: actions/github-script@v6
         with:
           script: |
             let pkg = require('./src/package.json');
@@ -188,7 +197,7 @@ jobs:
             require('fs').writeFileSync('src/package.json', JSON.stringify(pkg, null, 2));
 
       - name: Change owner and repo in package.json
-        uses: actions/github-script@v5
+        uses: actions/github-script@v6
         with:
           script: |
             let pkg = require('./package.json');
@@ -235,7 +244,7 @@ jobs:
     needs: [ create-draft-release, publish-files ]
     steps:
       - name: Update draft to release
-        uses: actions/github-script@v5
+        uses: actions/github-script@v6
         with:
           script: |
             await github.rest.repos.updateRelease({
@@ -252,7 +261,7 @@ jobs:
     needs: [ create-draft-release, publish-files ]
     steps:
       - name: Delete Release
-        uses: actions/github-script@v5
+        uses: actions/github-script@v6
         with:
           script: |
             await github.rest.repos.deleteRelease({
