@@ -186,15 +186,15 @@ jobs:
       - name: Copy assets files
         run: npx cpr nightlyRepo/assets assets -o
 
-      - name: Change version in src/package.json
+      - name: Change version in release/app/package.json
         uses: actions/github-script@v6
         with:
           script: |
-            let pkg = require('./src/package.json');
+            let pkg = require('./release/app/package.json');
             pkg.version = '${{needs.create-draft-release.outputs.version}}';
             pkg.productName = '${{env.PRODUCT_NAME}}';
             pkg.name = '${{env.PACKAGE_NAME}}';
-            require('fs').writeFileSync('src/package.json', JSON.stringify(pkg, null, 2));
+            require('fs').writeFileSync('./release/app/package.json', JSON.stringify(pkg, null, 2));
 
       - name: Change owner and repo in package.json
         uses: actions/github-script@v6
