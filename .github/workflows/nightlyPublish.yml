@@ -231,7 +231,7 @@ jobs:
           yarn electron-builder --publish always --x64 --win
 
       - name: Publish macOS releases
-        if: matrix.os == 'macos-latest'
+        if: matrix.os == 'macos-13'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
