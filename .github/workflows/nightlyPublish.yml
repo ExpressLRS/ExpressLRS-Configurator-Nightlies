@@ -30,7 +30,7 @@ jobs:
 
       - name: Get latest release
         id: latest-release
-        uses: actions/github-script@v6
+        uses: actions/github-script@v7
         with:
           script: |
             try {
@@ -59,7 +59,7 @@ jobs:
 
       - name: Get latest commit
         id: latest-commit
-        uses: actions/github-script@v6
+        uses: actions/github-script@v7
         with:
           script: |
             const branch = await github.rest.repos.getBranch({
@@ -73,7 +73,7 @@ jobs:
             return branch.data.commit.sha;
 
       - name: Compare latest release to current commit
-        uses: actions/github-script@v6
+        uses: actions/github-script@v7
         with:
           script: |
             const latestCommitHash = ${{ steps.latest-commit.outputs.result }}
@@ -94,7 +94,7 @@ jobs:
 
       - name: Get changes between commits
         id: latest-change-messages
-        uses: actions/github-script@v6
+        uses: actions/github-script@v7
         with:
           script: |
             const latestCommitHash = ${{ steps.latest-commit.outputs.result }}
@@ -132,7 +132,7 @@ jobs:
 
       - name: Create Release
         id: create-release
-        uses: actions/github-script@v6
+        uses: actions/github-script@v7
         with:
           script: |
             const bodyFileContent = require('fs').readFileSync('releaseMessage.md', { encoding: 'utf8' });
@@ -191,7 +191,7 @@ jobs:
         run: npx cpr nightlyRepo/assets assets -o
 
       - name: Change version in release/app/package.json
-        uses: actions/github-script@v6
+        uses: actions/github-script@v7
         with:
           script: |
             let pkg = require('./release/app/package.json');
@@ -201,7 +201,7 @@ jobs:
             require('fs').writeFileSync('./release/app/package.json', JSON.stringify(pkg, null, 2));
 
       - name: Change owner and repo in package.json
-        uses: actions/github-script@v6
+        uses: actions/github-script@v7
         with:
           script: |
             let pkg = require('./package.json');
@@ -252,7 +252,7 @@ jobs:
     needs: [ create-draft-release, publish-files ]
     steps:
       - name: Update draft to release
-        uses: actions/github-script@v6
+        uses: actions/github-script@v7
         with:
           script: |
             await github.rest.repos.updateRelease({
@@ -269,7 +269,7 @@ jobs:
     needs: [ create-draft-release, publish-files ]
     steps:
       - name: Delete Release
-        uses: actions/github-script@v6
+        uses: actions/github-script@v7
         with:
           script: |
             await github.rest.repos.deleteRelease({
