@@ -234,13 +234,32 @@ jobs:
           yarn build
           yarn electron-builder --publish always --x64 --win
 
+      - name: Download macOS portable dependencies
+        if: matrix.os == 'macos-15'
+        run: |
+          ./dependencies/download-mac-dependencies.sh x64
+          ./dependencies/download-mac-dependencies.sh arm64
+
       - name: Publish macOS releases
         if: matrix.os == 'macos-15'
         env:
+          # Code signing and notarization secrets, see
+          # docs/macos-code-signing.md in the main repository. When they are
+          # not configured the steps are skipped and the build stays unsigned.
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          # electron-builder treats an empty CSC_LINK as a certificate to
+          # import, drop the signing variables when the secrets are missing
+          if [ -z "$CSC_LINK" ]; then
+            unset CSC_LINK CSC_KEY_PASSWORD
+          fi
           yarn build
-          yarn electron-builder --publish always --x64 --mac
+          yarn electron-builder --publish always --x64 --arm64 --mac
 
       - name: Publish Linux releases
         if: matrix.os == 'ubuntu-22.04'
