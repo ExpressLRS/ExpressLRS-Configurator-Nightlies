@@ -177,11 +177,14 @@ jobs:
         with:
           path: 'nightlyRepo'
 
-      - name: Install Node, NPM and Yarn
+      - name: Install Node and NPM
         uses: actions/setup-node@v6
         with:
-          node-version: 24
-          cache: 'yarn'
+          node-version-file: '.nvmrc'
+          cache: 'npm'
+          cache-dependency-path: |
+            package-lock.json
+            release/app/package-lock.json
 
       - uses: actions/setup-python@v6
         with:
@@ -223,7 +226,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          yarn install --prefer-offline --network-timeout 180000
+          npm ci --prefer-offline
 
       - name: Publish Windows releases
         if: matrix.os == 'windows-2022'
@@ -231,8 +234,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          yarn build
-          yarn electron-builder --publish always --x64 --win
+          npm run build
+          npx electron-builder --publish always --x64 --win
 
       - name: Download macOS portable dependencies
         if: matrix.os == 'macos-15'
@@ -258,16 +261,16 @@ jobs:
           if [ -z "$CSC_LINK" ]; then
             unset CSC_LINK CSC_KEY_PASSWORD
           fi
-          yarn build
-          yarn electron-builder --publish always --x64 --arm64 --mac
+          npm run build
+          npx electron-builder --publish always --x64 --arm64 --mac
 
       - name: Publish Linux releases
         if: matrix.os == 'ubuntu-22.04'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          yarn build
-          yarn electron-builder --publish always --x64 --linux
+          npm run build
+          npx electron-builder --publish always --x64 --linux
 
   publish-release:
     name: Publish Release
